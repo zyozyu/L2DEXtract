@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 const route = useRoute()
 </script>
@@ -7,8 +7,15 @@ const route = useRoute()
 <template>
   <el-container class="shell">
     <el-header class="header">
-      <div class="brand">L2DEXtract</div>
-      <el-menu mode="horizontal" :default-active="route.path" router :ellipsis="false">
+      <RouterLink to="/" class="brand">L2DEXtract</RouterLink>
+      <el-menu
+        mode="horizontal"
+        :default-active="route.path"
+        :key="route.path"
+        router
+        :ellipsis="false"
+      >
+        <el-menu-item index="/">首页</el-menu-item>
         <el-menu-item index="/extract">解包</el-menu-item>
         <el-menu-item index="/preview">预览</el-menu-item>
       </el-menu>
@@ -37,6 +44,7 @@ const route = useRoute()
   font-size: 18px;
   font-weight: 700;
   color: var(--el-color-primary);
+  text-decoration: none;
 }
 
 .header :deep(.el-menu--horizontal) {
