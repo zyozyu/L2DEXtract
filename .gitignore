@@ -147,3 +147,31 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Logs
+pnpm-debug.log*
+
+node_modules
+.DS_Store
+dist-ssr
+release
+*.local
+
+# Editor directories and files
+**/.vscode/
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+
+# Vite
+*.timestamp-*-*.mjs
