@@ -2,13 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { extractLpk } from './lpk/loader.ts'
-import {
-  loadPreviewModel,
-  previewPageUrl,
-  startPreviewServer,
-} from './preview-server.ts'
+import { loadPreviewModel, startPreviewServer } from './preview-server.ts'
 
 const pendingFileIds = new Map<string, (fileId: string) => void>()
 
@@ -92,17 +87,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   )
 
   ipcMain.handle('preview:start', async () => {
-    const url = await startPreviewServer(resolvePreviewAssets())
-    return { url, pageUrl: previewPageUrl() }
+    const url = await startPreviewServer()
+    return { url }
   })
 
   ipcMain.handle('preview:load-model', (_event, dirPath: string) => {
     return loadPreviewModel(dirPath)
-  })
-
-  ipcMain.handle('preview:open-browser', async () => {
-    const url = await startPreviewServer(resolvePreviewAssets())
-    await shell.openExternal(`${url}/static/live2d/web.html?lang=zh`)
   })
 }
 
@@ -113,17 +103,4 @@ function requestFileId(win: BrowserWindow | null): Promise<string> {
     pendingFileIds.set(requestId, resolve)
     win.webContents.send('extract:need-file-id', requestId)
   })
-}
-
-function resolvePreviewAssets(): string {
-  const bundledDir = path.dirname(fileURLToPath(import.meta.url))
-  const candidates = [
-    path.join(process.resourcesPath, 'preview'),
-    path.join(app.getAppPath(), 'resources', 'preview'),
-    path.join(bundledDir, '../../resources/preview'),
-  ]
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, 'live2d', 'web.html'))) return candidate
-  }
-  throw new Error('找不到预览资源')
 }

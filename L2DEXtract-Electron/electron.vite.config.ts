@@ -11,7 +11,7 @@ export default defineConfig({
   main: {
     build: {
       externalizeDeps: {
-        exclude: ['adm-zip', 'ws'],
+        exclude: ['adm-zip'],
       },
       rollupOptions: {
         input: {

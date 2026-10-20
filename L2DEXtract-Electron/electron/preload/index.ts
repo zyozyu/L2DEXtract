@@ -7,7 +7,6 @@ export interface ExtractResult {
 
 export interface LoadModelResult {
   modelUrl: string
-  clients: number
 }
 
 const api = {
@@ -37,10 +36,8 @@ const api = {
     return () => ipcRenderer.removeListener('extract:need-file-id', listener)
   },
   openPath: (target: string) => ipcRenderer.invoke('shell:open-path', target) as Promise<void>,
-  startPreview: () =>
-    ipcRenderer.invoke('preview:start') as Promise<{ url: string; pageUrl: string }>,
+  startPreview: () => ipcRenderer.invoke('preview:start') as Promise<{ url: string }>,
   loadModel: (dir: string) => ipcRenderer.invoke('preview:load-model', dir) as Promise<LoadModelResult>,
-  openPreviewInBrowser: () => ipcRenderer.invoke('preview:open-browser') as Promise<void>,
 }
 
 if (process.contextIsolated) {

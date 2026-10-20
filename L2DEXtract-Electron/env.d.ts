@@ -7,7 +7,6 @@ interface ExtractResult {
 
 interface LoadModelResult {
   modelUrl: string
-  clients: number
 }
 
 interface ElectronApi {
@@ -21,9 +20,8 @@ interface ElectronApi {
   onExtractLog: (handler: (line: string) => void) => () => void
   onNeedFileId: (handler: (respond: (fileId: string) => void) => void) => () => void
   openPath: (target: string) => Promise<void>
-  startPreview: () => Promise<{ url: string; pageUrl: string }>
+  startPreview: () => Promise<{ url: string }>
   loadModel: (dir: string) => Promise<LoadModelResult>
-  openPreviewInBrowser: () => Promise<void>
 }
 
 interface Window {

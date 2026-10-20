@@ -1,6 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import ExtractView from '@/views/ExtractView.vue'
-import PreviewView from '@/views/PreviewView.vue'
+import ExtractView from '@/views/extract/index.vue'
+import PreviewView from '@/views/preview/index.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),

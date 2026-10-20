@@ -23,13 +23,11 @@
     "element-plus": "^2.14.7",
     "pinia": "^4.0.3",
     "vue": "^3.5.42",
-    "vue-router": "^5.3.1",
-    "ws": "^8.22.0"
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@tsconfig/node24": "^24.0.5",
     "@types/node": "^24.13.4",
-    "@types/ws": "^8.18.2",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/eslint-config-typescript": "^14.9.0",
     "@vue/tsconfig": "^0.9.1",
@@ -61,12 +59,6 @@
     },
     "files": [
       "out/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "resources/preview",
-        "to": "preview"
-      }
     ],
     "asar": true,
     "win": {
