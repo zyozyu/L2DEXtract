@@ -9,7 +9,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "electron-vite preview",
     "build-only": "electron-vite build",
-    "dist": "pnpm build && electron-builder --win",
+    "dist": "pnpm build && node --use-system-ca ./node_modules/electron-builder/cli.js --win",
     "type-check": "vue-tsc --build",
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
