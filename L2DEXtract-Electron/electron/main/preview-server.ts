@@ -52,34 +52,103 @@ export function mountModelDir(dirPath: string): string {
   return `/model/${id}`
 }
 
-export function loadPreviewModel(dirPath: string): { modelUrl: string } {
+export interface ListedModel {
+  name: string
+  dir: string
+  file: string
+}
+
+const MAX_MODEL_DEPTH = 6
+const MAX_MODELS = 200
+const MAX_DIRS = 400
+
+export function loadPreviewModel(dirPath: string, fileName?: string): { modelUrl: string } {
   if (!previewUrl) throw new Error('预览服务还没启动')
-  const modelJson = findModelJson(dirPath)
+  const dir = path.resolve(dirPath)
+  const modelJson = fileName ? resolveModelFile(dir, fileName) : findModelJson(dir)
   if (!modelJson) throw new Error('没有找到可用的模型 JSON')
-  const basePath = mountModelDir(dirPath)
+  const basePath = mountModelDir(dir)
   const modelUrl = `${previewUrl}${basePath}/${encodeURIComponent(path.basename(modelJson))}`
   return { modelUrl }
 }
 
+export function listModels(rootPath: string): ListedModel[] {
+  const root = path.resolve(rootPath)
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    throw new Error(`目录不存在：${rootPath}`)
+  }
+  const found: ListedModel[] = []
+  let dirs = 0
+  const visit = (dir: string, depth: number) => {
+    if (found.length >= MAX_MODELS || dirs >= MAX_DIRS) return
+    dirs += 1
+    const files = listModelFiles(dir)
+    const rel = path.relative(root, dir).replaceAll('\\', '/')
+    for (const file of files) {
+      if (found.length >= MAX_MODELS) return
+      const stem = file.replace(/\.json$/i, '')
+      const name = !rel ? stem : files.length === 1 ? rel : `${rel} / ${stem}`
+      found.push({ name, dir, file })
+    }
+    if (depth >= MAX_MODEL_DEPTH) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+      visit(path.join(dir, entry.name), depth + 1)
+    }
+  }
+  visit(root, 0)
+  return found
+}
+
 export function findModelJson(folder: string): string | null {
-  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) return null
-  const files = fs.readdirSync(folder)
+  const file = listModelFiles(folder)[0]
+  return file ? path.join(folder, file) : null
+}
+
+function listModelFiles(folder: string): string[] {
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) return []
+  let names: string[]
+  try {
+    names = fs.readdirSync(folder)
+  } catch {
+    return []
+  }
   const groups = [
-    files.filter((file) => file.endsWith('.model3.json')),
-    files.filter((file) => file.endsWith('.model.json')),
-    files.filter((file) => file.toLowerCase().includes('model') && file.endsWith('.json')),
-    files.filter((file) => file.endsWith('.json')),
+    names.filter((file) => file.endsWith('.model3.json')),
+    names.filter((file) => file.endsWith('.model.json')),
+    names.filter((file) => file.toLowerCase().includes('model') && file.endsWith('.json')),
+    names.filter((file) => file.endsWith('.json')),
   ]
   const seen = new Set<string>()
+  const found: string[] = []
   for (const group of groups) {
     for (const file of group) {
       if (seen.has(file)) continue
       seen.add(file)
       const full = path.join(folder, file)
-      if (fs.statSync(full).isFile() && isModelJson(full)) return full
+      try {
+        if (fs.statSync(full).isFile() && isModelJson(full)) found.push(file)
+      } catch {
+        continue
+      }
     }
   }
-  return null
+  return found
+}
+
+function resolveModelFile(dir: string, fileName: string): string | null {
+  const base = path.basename(fileName)
+  if (!base || base !== fileName.replaceAll('\\', '/').split('/').pop()) return null
+  const full = path.join(dir, base)
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile() || !isModelJson(full)) return null
+  return full
 }
 
 function isModelJson(file: string): boolean {

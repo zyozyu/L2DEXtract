@@ -67,7 +67,7 @@ export class Live2dPlayer {
       autoDensity: true,
       antialias: true,
     })
-    this.placeholder = new PIXI.Text('选择模型目录后点击加载', {
+    this.placeholder = new PIXI.Text('', {
       fontFamily: 'Manrope, sans-serif',
       fontSize: 18,
       fill: 0x5c6b7c,
@@ -137,6 +137,23 @@ export class Live2dPlayer {
     this.model.pivot.set(bounds.x + w0 / 2, bounds.y + h0 / 2)
     this.patch({ posX: 0, posY: 0, scalePct: 100, rotation: 0, opacityPct: 100 })
     this.applyTransform()
+  }
+
+  clear() {
+    if (this.model && this.app) {
+      this.app.stage.removeChild(this.model)
+      this.model.destroy()
+      this.model = null
+    }
+    this.modelPath = ''
+    this.modelData = null
+    this.patch({
+      modelName: '',
+      expressions: [],
+      motions: [],
+      currentExpression: '',
+      currentMotion: '',
+    })
   }
 
   destroy() {

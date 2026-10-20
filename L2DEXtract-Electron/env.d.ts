@@ -9,6 +9,12 @@ interface LoadModelResult {
   modelUrl: string
 }
 
+interface ListedModel {
+  name: string
+  dir: string
+  file: string
+}
+
 interface ElectronApi {
   getPathForFile: (file: File) => string
   selectLpk: () => Promise<string | null>
@@ -21,7 +27,10 @@ interface ElectronApi {
   onNeedFileId: (handler: (respond: (fileId: string) => void) => void) => () => void
   openPath: (target: string) => Promise<void>
   startPreview: () => Promise<{ url: string }>
-  loadModel: (dir: string) => Promise<LoadModelResult>
+  listModels: (dir: string) => Promise<ListedModel[]>
+  loadModel: (dir: string, file?: string) => Promise<LoadModelResult>
+  deleteModel: (dir: string) => Promise<void>
+  saveModelAs: (dir: string) => Promise<string | null>
 }
 
 interface Window {
