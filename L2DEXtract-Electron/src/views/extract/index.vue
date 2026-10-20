@@ -136,109 +136,117 @@ function errorText(error: unknown): string {
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <header>
-      <h1>解包</h1>
-      <p>选择 LPK。工坊包如果旁边有 config.json，会自动填上。</p>
-    </header>
+    <el-row :gutter="16" class="grid">
+      <el-col :span="14" class="col">
+        <el-card class="panel" shadow="never">
+          <template #header>
+            <div class="head">
+              <span>解包</span>
+              <el-text type="info">选择 LPK。工坊包如果旁边有 config.json，会自动填上。</el-text>
+            </div>
+          </template>
 
-    <div class="drop" :class="{ hot: dragging }">把 .lpk 或 config.json 拖到这里</div>
+          <div class="drop" :class="{ hot: dragging }">把 .lpk 或 config.json 拖到这里</div>
 
-    <div class="field">
-      <span>LPK 文件</span>
-      <div class="row">
-        <el-input v-model="lpk" readonly placeholder="选择 .lpk" />
-        <el-button @click="pickLpk">浏览</el-button>
-      </div>
-    </div>
-    <div class="field">
-      <span>config.json</span>
-      <div class="row">
-        <el-input v-model="configPath" readonly placeholder="STD 包可以留空，工坊包需要" />
-        <el-button @click="pickConfig">浏览</el-button>
-      </div>
-    </div>
-    <div class="field">
-      <span>输出目录</span>
-      <div class="row">
-        <el-input v-model="outputDir" readonly placeholder="输出目录" />
-        <el-button @click="pickOutput">浏览</el-button>
-      </div>
-    </div>
+          <el-form label-position="top">
+            <el-form-item label="LPK 文件">
+              <el-input v-model="lpk" readonly placeholder="选择 .lpk">
+                <template #append>
+                  <el-button @click="pickLpk">浏览</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="config.json">
+              <el-input v-model="configPath" readonly placeholder="STD 包可以留空，工坊包需要">
+                <template #append>
+                  <el-button @click="pickConfig">浏览</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+            <el-form-item label="输出目录">
+              <el-input v-model="outputDir" readonly placeholder="输出目录">
+                <template #append>
+                  <el-button @click="pickOutput">浏览</el-button>
+                </template>
+              </el-input>
+            </el-form-item>
+          </el-form>
 
-    <div class="actions">
-      <el-button type="primary" :loading="running" @click="start">开始解包</el-button>
-      <el-button :disabled="!outputDir" @click="openOutput">打开输出目录</el-button>
-      <el-button v-if="previewDir" @click="goPreview">预览模型</el-button>
-    </div>
+          <div class="actions">
+            <el-button type="primary" :loading="running" @click="start">开始解包</el-button>
+            <el-button :disabled="!outputDir" @click="openOutput">打开输出目录</el-button>
+            <el-button v-if="previewDir" @click="goPreview">预览模型</el-button>
+          </div>
 
-    <el-progress
-      v-if="running || progress === 100"
-      :percentage="running ? 100 : progress"
-      :indeterminate="running"
-      :stroke-width="8"
-    />
+          <el-progress
+            v-if="running || progress === 100"
+            :percentage="running ? 100 : progress"
+            :indeterminate="running"
+            :stroke-width="8"
+            :status="!running && progress === 100 ? 'success' : undefined"
+          />
+        </el-card>
+      </el-col>
 
-    <div ref="logEl" class="log">
-      <p v-if="logs.length === 0">日志会显示在这里。</p>
-      <p v-for="(line, index) in logs" :key="index">{{ line }}</p>
-    </div>
+      <el-col :span="10" class="col">
+        <el-card class="panel" shadow="never">
+          <template #header>日志</template>
+          <div ref="logEl" class="log">
+            <el-text v-if="logs.length === 0" type="info">日志会显示在这里。</el-text>
+            <p v-for="(line, index) in logs" :key="index">{{ line }}</p>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
   </section>
 </template>
 
 <style scoped>
 .extract {
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 28px 32px 24px;
   min-width: 0;
 }
 
-header h1 {
-  margin: 0;
-  font-size: 28px;
-  letter-spacing: -0.04em;
+.grid,
+.col {
+  height: 100%;
 }
 
-header p {
-  margin: 6px 0 0;
-  color: #5c6b7c;
+.panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--el-border-color-light);
+}
+
+.panel :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .drop {
-  border: 1.5px dashed #b7c5d4;
-  border-radius: 12px;
-  padding: 18px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: var(--el-border-radius-base);
+  padding: 28px 16px;
   text-align: center;
-  color: #5c6b7c;
-  background: #f7f9fc;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-blank);
 }
 
 .drop.hot {
-  border-color: #e85d4c;
-  color: #e85d4c;
-  background: #fdf0ee;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field span {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-}
-
-.row .el-input {
-  flex: 1;
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
 }
 
 .actions {
@@ -248,16 +256,15 @@ header p {
 
 .log {
   flex: 1;
-  min-height: 180px;
+  min-height: 0;
   overflow: auto;
-  margin: 0;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: #1c2430;
-  color: #d5deea;
-  font-family: 'Cascadia Code', 'Sarasa Mono SC', ui-monospace, monospace;
+  padding: 12px;
+  border-radius: var(--el-border-radius-base);
+  background: var(--el-fill-color-light);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
 }
 
 .log p {

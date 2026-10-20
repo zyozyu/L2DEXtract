@@ -1,66 +1,61 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
+
+const route = useRoute()
 </script>
 
 <template>
-  <div class="shell">
-    <aside class="nav">
-      <div class="mark">L2DEXtract</div>
-      <nav>
-        <RouterLink to="/extract">解包</RouterLink>
-        <RouterLink to="/preview">预览</RouterLink>
-      </nav>
-    </aside>
-    <main>
+  <el-container class="shell">
+    <el-header class="header">
+      <div class="brand">L2DEXtract</div>
+      <el-menu mode="horizontal" :default-active="route.path" router :ellipsis="false">
+        <el-menu-item index="/extract">解包</el-menu-item>
+        <el-menu-item index="/preview">预览</el-menu-item>
+      </el-menu>
+    </el-header>
+    <el-main class="main">
       <RouterView />
-    </main>
-  </div>
+    </el-main>
+  </el-container>
 </template>
 
 <style scoped>
 .shell {
   height: 100%;
-  display: flex;
-  background: #e6edf4;
-  color: #1c2430;
 }
 
-.nav {
-  width: 168px;
+.header {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  background: var(--el-bg-color);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.brand {
   flex: none;
-  padding: 28px 16px;
-  display: flex;
-  flex-direction: column;
-}
-
-.mark {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.04em;
-  margin-bottom: 28px;
+  color: var(--el-color-primary);
 }
 
-nav {
+.header :deep(.el-menu--horizontal) {
+  flex: 1;
+  border-bottom: none;
+  background: transparent;
+}
+
+.main {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  min-height: 0;
+  padding: 16px;
+  background: var(--el-bg-color-page);
+  overflow: hidden;
 }
 
-nav a {
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: inherit;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-nav a.router-link-active {
-  background: #f7f9fc;
-  color: #e85d4c;
-}
-
-main {
+.main > :deep(*) {
   flex: 1;
-  min-width: 0;
+  min-height: 0;
 }
 </style>
