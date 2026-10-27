@@ -1,6 +1,6 @@
 {
   "name": "l2dextract-electron",
-  "version": "1.0.0.261027",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -62,6 +62,7 @@
     ],
     "asar": true,
     "win": {
+      "icon": "public/favicon.ico",
       "target": [
         "nsis"
       ]
