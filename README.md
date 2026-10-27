@@ -32,11 +32,21 @@ Steam 创意工坊批量解包、软件渲染、WPK 还不在这个版本里。
 
 ## 从源码运行
 
-需要 Node.js `^22.18.0` 或 `>=24.12.0`，以及 pnpm。
+建议 Node.js `22.18.0`、pnpm `11.7.0`。
 
 ```sh
+# 查看nodejs和pnpm版本
+node -v
+pnpm -v
+
+# 安装pnpm11.7.0
+npm install -g pnpm@11.7.0
+
+# 安装依赖
 cd L2DEXtract-Electron
 pnpm install
+
+# 启动项目
 pnpm dev
 ```
 

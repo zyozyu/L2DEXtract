@@ -32,11 +32,21 @@ A `.wpk` must be unpacked first so you have the `.lpk` and `config.json`. A few 
 
 ## Run from source
 
-Node.js `^22.18.0` or `>=24.12.0`, and pnpm.
+Recommended: Node.js `22.18.0` and pnpm `11.7.0`.
 
 ```sh
+# Check Node.js and pnpm versions
+node -v
+pnpm -v
+
+# Install pnpm 11.7.0
+npm install -g pnpm@11.7.0
+
+# Install dependencies
 cd L2DEXtract-Electron
 pnpm install
+
+# Start the project
 pnpm dev
 ```
 
