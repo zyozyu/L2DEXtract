@@ -7,7 +7,12 @@ export interface ExtractResult {
 
 export interface LoadModelResult {
   modelUrl: string
-  clients: number
+}
+
+export interface ListedModel {
+  name: string
+  dir: string
+  file: string
 }
 
 const api = {
@@ -37,10 +42,12 @@ const api = {
     return () => ipcRenderer.removeListener('extract:need-file-id', listener)
   },
   openPath: (target: string) => ipcRenderer.invoke('shell:open-path', target) as Promise<void>,
-  startPreview: () =>
-    ipcRenderer.invoke('preview:start') as Promise<{ url: string; pageUrl: string }>,
-  loadModel: (dir: string) => ipcRenderer.invoke('preview:load-model', dir) as Promise<LoadModelResult>,
-  openPreviewInBrowser: () => ipcRenderer.invoke('preview:open-browser') as Promise<void>,
+  startPreview: () => ipcRenderer.invoke('preview:start') as Promise<{ url: string }>,
+  listModels: (dir: string) => ipcRenderer.invoke('preview:list-models', dir) as Promise<ListedModel[]>,
+  loadModel: (dir: string, file?: string) =>
+    ipcRenderer.invoke('preview:load-model', dir, file) as Promise<LoadModelResult>,
+  deleteModel: (dir: string) => ipcRenderer.invoke('preview:delete-model', dir) as Promise<void>,
+  saveModelAs: (dir: string) => ipcRenderer.invoke('preview:save-model-as', dir) as Promise<string | null>,
 }
 
 if (process.contextIsolated) {

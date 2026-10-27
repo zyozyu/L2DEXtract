@@ -2,22 +2,20 @@ import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
-import { WebSocket, WebSocketServer } from 'ws'
 
-const clients = new Set<WebSocket>()
 const mounts = new Map<string, string>()
 
 let previewUrl = ''
 let starting: Promise<string> | null = null
 
-export function previewPageUrl(): string {
-  return previewUrl ? `${previewUrl}/static/live2d/web.html?lang=zh` : ''
+export function getPreviewUrl(): string {
+  return previewUrl
 }
 
-export function startPreviewServer(assetsDir: string): Promise<string> {
+export function startPreviewServer(): Promise<string> {
   if (previewUrl) return Promise.resolve(previewUrl)
   if (!starting) {
-    starting = openPreviewServer(assetsDir).catch((error: unknown) => {
+    starting = openPreviewServer().catch((error: unknown) => {
       starting = null
       throw error
     })
@@ -25,23 +23,9 @@ export function startPreviewServer(assetsDir: string): Promise<string> {
   return starting
 }
 
-function openPreviewServer(assetsDir: string): Promise<string> {
+function openPreviewServer(): Promise<string> {
   const server = http.createServer((req, res) => {
-    void handleRequest(req, res, assetsDir)
-  })
-  const wss = new WebSocketServer({ noServer: true })
-
-  server.on('upgrade', (req, socket, head) => {
-    const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
-    if (pathname !== '/ws/preview') {
-      socket.destroy()
-      return
-    }
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      clients.add(ws)
-      ws.on('close', () => clients.delete(ws))
-      ws.on('error', () => clients.delete(ws))
-    })
+    void handleRequest(req, res)
   })
 
   return new Promise((resolve, reject) => {
@@ -68,50 +52,103 @@ export function mountModelDir(dirPath: string): string {
   return `/model/${id}`
 }
 
-export function broadcastPreview(message: unknown): number {
-  const text = JSON.stringify(message)
-  let count = 0
-  for (const ws of clients) {
-    if (ws.readyState !== WebSocket.OPEN) continue
-    ws.send(text)
-    count++
-  }
-  return count
+export interface ListedModel {
+  name: string
+  dir: string
+  file: string
 }
 
-export function loadPreviewModel(dirPath: string): { modelUrl: string; clients: number } {
+const MAX_MODEL_DEPTH = 6
+const MAX_MODELS = 200
+const MAX_DIRS = 400
+
+export function loadPreviewModel(dirPath: string, fileName?: string): { modelUrl: string } {
   if (!previewUrl) throw new Error('预览服务还没启动')
-  const modelJson = findModelJson(dirPath)
+  const dir = path.resolve(dirPath)
+  const modelJson = fileName ? resolveModelFile(dir, fileName) : findModelJson(dir)
   if (!modelJson) throw new Error('没有找到可用的模型 JSON')
-  const basePath = mountModelDir(dirPath)
+  const basePath = mountModelDir(dir)
   const modelUrl = `${previewUrl}${basePath}/${encodeURIComponent(path.basename(modelJson))}`
-  const clientsCount = broadcastPreview({
-    type: 'loadModel',
-    modelUrl,
-    modelPath: modelUrl,
-  })
-  return { modelUrl, clients: clientsCount }
+  return { modelUrl }
+}
+
+export function listModels(rootPath: string): ListedModel[] {
+  const root = path.resolve(rootPath)
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    throw new Error(`目录不存在：${rootPath}`)
+  }
+  const found: ListedModel[] = []
+  let dirs = 0
+  const visit = (dir: string, depth: number) => {
+    if (found.length >= MAX_MODELS || dirs >= MAX_DIRS) return
+    dirs += 1
+    const files = listModelFiles(dir)
+    const rel = path.relative(root, dir).replaceAll('\\', '/')
+    for (const file of files) {
+      if (found.length >= MAX_MODELS) return
+      const stem = file.replace(/\.json$/i, '')
+      const name = !rel ? stem : files.length === 1 ? rel : `${rel} / ${stem}`
+      found.push({ name, dir, file })
+    }
+    if (depth >= MAX_MODEL_DEPTH) return
+    let entries: fs.Dirent[]
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+      visit(path.join(dir, entry.name), depth + 1)
+    }
+  }
+  visit(root, 0)
+  return found
 }
 
 export function findModelJson(folder: string): string | null {
-  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) return null
-  const files = fs.readdirSync(folder)
+  const file = listModelFiles(folder)[0]
+  return file ? path.join(folder, file) : null
+}
+
+function listModelFiles(folder: string): string[] {
+  if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) return []
+  let names: string[]
+  try {
+    names = fs.readdirSync(folder)
+  } catch {
+    return []
+  }
   const groups = [
-    files.filter((file) => file.endsWith('.model3.json')),
-    files.filter((file) => file.endsWith('.model.json')),
-    files.filter((file) => file.toLowerCase().includes('model') && file.endsWith('.json')),
-    files.filter((file) => file.endsWith('.json')),
+    names.filter((file) => file.endsWith('.model3.json')),
+    names.filter((file) => file.endsWith('.model.json')),
+    names.filter((file) => file.toLowerCase().includes('model') && file.endsWith('.json')),
+    names.filter((file) => file.endsWith('.json')),
   ]
   const seen = new Set<string>()
+  const found: string[] = []
   for (const group of groups) {
     for (const file of group) {
       if (seen.has(file)) continue
       seen.add(file)
       const full = path.join(folder, file)
-      if (fs.statSync(full).isFile() && isModelJson(full)) return full
+      try {
+        if (fs.statSync(full).isFile() && isModelJson(full)) found.push(file)
+      } catch {
+        continue
+      }
     }
   }
-  return null
+  return found
+}
+
+function resolveModelFile(dir: string, fileName: string): string | null {
+  const base = path.basename(fileName)
+  if (!base || base !== fileName.replaceAll('\\', '/').split('/').pop()) return null
+  const full = path.join(dir, base)
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile() || !isModelJson(full)) return null
+  return full
 }
 
 function isModelJson(file: string): boolean {
@@ -126,11 +163,7 @@ function isModelJson(file: string): boolean {
   }
 }
 
-async function handleRequest(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  assetsDir: string,
-): Promise<void> {
+async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   try {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
     if (req.method === 'OPTIONS') {
@@ -138,31 +171,9 @@ async function handleRequest(
       res.end()
       return
     }
-    if (url.pathname === '/favicon.ico') {
-      writeHeaders(res, 404)
-      res.end()
-      return
-    }
-    if (url.pathname === '/') {
-      res.writeHead(302, { Location: '/static/live2d/web.html' })
-      res.end()
-      return
-    }
-    if (req.method === 'POST' && url.pathname === '/api/preview/broadcast') {
-      const payload = await readJson(req)
-      const count = broadcastPreview(payload)
-      writeHeaders(res, 200, 'application/json; charset=utf-8')
-      res.end(JSON.stringify({ ok: true, clients: count }))
-      return
-    }
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       writeHeaders(res, 405)
       res.end()
-      return
-    }
-    if (url.pathname.startsWith('/static/')) {
-      const file = resolveInside(assetsDir, url.pathname.slice('/static/'.length))
-      sendFile(res, file, req.method === 'HEAD')
       return
     }
     const modelMatch = url.pathname.match(/^\/model\/([^/]+)\/(.+)$/)
@@ -222,19 +233,13 @@ function writeHeaders(res: http.ServerResponse, status: number, type = 'text/pla
   res.writeHead(status, {
     'Content-Type': type,
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,HEAD,POST,OPTIONS',
+    'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   })
 }
 
 function contentType(file: string): string {
   switch (path.extname(file).toLowerCase()) {
-    case '.html':
-      return 'text/html; charset=utf-8'
-    case '.js':
-      return 'text/javascript; charset=utf-8'
-    case '.css':
-      return 'text/css; charset=utf-8'
     case '.json':
       return 'application/json; charset=utf-8'
     case '.png':
@@ -254,23 +259,12 @@ function contentType(file: string): string {
       return 'audio/ogg'
     case '.mp3':
       return 'audio/mpeg'
+    case '.moc3':
+    case '.moc':
+      return 'application/octet-stream'
     default:
       return 'application/octet-stream'
   }
-}
-
-async function readJson(req: http.IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = []
-  let size = 0
-  for await (const chunk of req) {
-    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    size += buf.length
-    if (size > 1_000_000) throw new Error('body too large')
-    chunks.push(buf)
-  }
-  const text = Buffer.concat(chunks).toString('utf8')
-  if (!text) return {}
-  return JSON.parse(text) as unknown
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

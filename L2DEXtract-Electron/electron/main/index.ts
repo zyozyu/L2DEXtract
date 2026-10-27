@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import icon from '../../public/icon.png?asset'
 import { registerIpc } from './ipc.ts'
 
 const appDir = dirname(fileURLToPath(import.meta.url))
@@ -14,6 +15,7 @@ function createWindow(): void {
     minHeight: 640,
     show: false,
     autoHideMenuBar: true,
+    icon,
     webPreferences: {
       preload: join(appDir, '../preload/index.mjs'),
       contextIsolation: true,

@@ -2,13 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { randomBytes } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { extractLpk } from './lpk/loader.ts'
-import {
-  loadPreviewModel,
-  previewPageUrl,
-  startPreviewServer,
-} from './preview-server.ts'
+import { listModels, loadPreviewModel, startPreviewServer } from './preview-server.ts'
 
 const pendingFileIds = new Map<string, (fileId: string) => void>()
 
@@ -92,18 +87,58 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   )
 
   ipcMain.handle('preview:start', async () => {
-    const url = await startPreviewServer(resolvePreviewAssets())
-    return { url, pageUrl: previewPageUrl() }
+    const url = await startPreviewServer()
+    return { url }
   })
 
-  ipcMain.handle('preview:load-model', (_event, dirPath: string) => {
-    return loadPreviewModel(dirPath)
+  ipcMain.handle('preview:list-models', (_event, dirPath: string) => {
+    return listModels(dirPath)
   })
 
-  ipcMain.handle('preview:open-browser', async () => {
-    const url = await startPreviewServer(resolvePreviewAssets())
-    await shell.openExternal(`${url}/static/live2d/web.html?lang=zh`)
+  ipcMain.handle('preview:load-model', (_event, dirPath: string, fileName?: string) => {
+    return loadPreviewModel(dirPath, fileName)
   })
+
+  ipcMain.handle('preview:delete-model', (_event, dirPath: string) => {
+    const dir = path.resolve(dirPath || '')
+    assertModelDir(dir)
+    fs.rmSync(dir, { recursive: true, force: false })
+  })
+
+  ipcMain.handle('preview:save-model-as', async (event, dirPath: string) => {
+    const dir = path.resolve(dirPath || '')
+    assertModelDir(dir)
+    const win = BrowserWindow.fromWebContents(event.sender) ?? getWindow()
+    if (!win) return null
+    const result = await dialog.showSaveDialog(win, {
+      title: '另存为',
+      defaultPath: dir,
+      buttonLabel: '保存',
+      properties: ['createDirectory', 'showOverwriteConfirmation'],
+    })
+    if (result.canceled || !result.filePath) return null
+    const dest = path.resolve(result.filePath)
+    if (samePath(dest, dir)) throw new Error('不能保存到原来的位置')
+    if (isInside(dir, dest)) throw new Error('不能保存到模型目录里面')
+    if (fs.existsSync(dest)) fs.rmSync(dest, { recursive: true, force: true })
+    fs.cpSync(dir, dest, { recursive: true })
+    return dest
+  })
+}
+
+function assertModelDir(dir: string): void {
+  const root = path.parse(dir).root
+  if (!dir || samePath(dir, root)) throw new Error('不能操作这个目录')
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error('模型目录不存在')
+}
+
+function samePath(a: string, b: string): boolean {
+  return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
+}
+
+function isInside(parent: string, child: string): boolean {
+  const rel = path.relative(path.resolve(parent), path.resolve(child))
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel)
 }
 
 function requestFileId(win: BrowserWindow | null): Promise<string> {
@@ -113,17 +148,4 @@ function requestFileId(win: BrowserWindow | null): Promise<string> {
     pendingFileIds.set(requestId, resolve)
     win.webContents.send('extract:need-file-id', requestId)
   })
-}
-
-function resolvePreviewAssets(): string {
-  const bundledDir = path.dirname(fileURLToPath(import.meta.url))
-  const candidates = [
-    path.join(process.resourcesPath, 'preview'),
-    path.join(app.getAppPath(), 'resources', 'preview'),
-    path.join(bundledDir, '../../resources/preview'),
-  ]
-  for (const candidate of candidates) {
-    if (fs.existsSync(path.join(candidate, 'live2d', 'web.html'))) return candidate
-  }
-  throw new Error('找不到预览资源')
 }
