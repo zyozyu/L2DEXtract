@@ -4,13 +4,21 @@
 
 ## Introduction
 
-Extract Live2DViewerEX `.lpk` packages and preview the resulting Live2D models. The desktop app is built with Electron, Vue 3, and TypeScript.
+Extract Live2DViewerEX `.lpk` packages and preview the resulting models. The desktop app is built with Electron, Vue 3, and TypeScript.
 
 Download and use it directly: https://github.com/zyozyu/L2DEXtract/releases/
 
 - Extracts `STD2_0` and `STM_1_0`. Unknown or older packs are attempted as `STD_1_0`.
 - Accepts a dropped `.lpk` and `config.json`. A `config.json` beside the `.lpk` is filled in automatically.
 - Previews a model inside the app, or opens the same preview page in the system browser.
+
+## Models that can be previewed
+
+- **Cubism 3/4**: `.model3.json` with `FileReferences.Moc`
+- **Cubism 2**: `.model.json` with a string `model` and a `textures` array
+- **Spine 3.8**: `model0.json` with `skeleton` and `atlases`. Motions can be switched, and a motion's voice plays with it
+
+Only Spine 3.8 is supported. Other Spine versions are not loaded.
 
 Home
 
