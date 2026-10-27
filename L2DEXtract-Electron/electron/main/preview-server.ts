@@ -152,6 +152,7 @@ function resolveModelFile(dir: string, fileName: string): string | null {
 }
 
 function isModelJson(file: string): boolean {
+  if (path.basename(file) === 'model0.json') return true
   try {
     const data = JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
     if (!isRecord(data)) return false

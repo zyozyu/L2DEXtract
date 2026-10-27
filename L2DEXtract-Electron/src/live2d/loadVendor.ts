@@ -1,7 +1,10 @@
+import * as PixiNs from 'pixi.js'
+
+const PIXI = { ...PixiNs } as typeof PixiNs & { live2d?: unknown }
+
 const SCRIPTS = [
   '/live2d-vendor/live2dcubismcore.min.js',
   '/live2d-vendor/live2d.min.js',
-  '/live2d-vendor/pixi.min.js',
   '/live2d-vendor/index.min.js',
 ]
 
@@ -21,12 +24,6 @@ function loadScript(src: string): Promise<void> {
     el.dataset.live2d = src
     el.onload = () => {
       el.dataset.loaded = '1'
-      if (src.endsWith('pixi.min.js')) {
-        const g = globalThis as unknown as { PIXI?: unknown }
-        if (g.PIXI === undefined && typeof PIXI !== 'undefined') {
-          g.PIXI = PIXI
-        }
-      }
       resolve()
     }
     el.onerror = () => reject(new Error(`加载失败: ${src}`))
@@ -37,11 +34,9 @@ function loadScript(src: string): Promise<void> {
 export function loadLive2dVendor(): Promise<void> {
   if (!loading) {
     loading = (async () => {
-      for (const src of SCRIPTS) {
-        await loadScript(src)
-      }
-      const g = globalThis as unknown as { PIXI?: { live2d?: unknown } }
-      if (!g.PIXI?.live2d) throw new Error('Live2D 库未就绪')
+      ;(globalThis as unknown as { PIXI?: unknown }).PIXI = PIXI
+      for (const src of SCRIPTS) await loadScript(src)
+      if (!PIXI.live2d) throw new Error('Live2D 库未就绪')
     })().catch((error: unknown) => {
       loading = null
       throw error
@@ -49,5 +44,3 @@ export function loadLive2dVendor(): Promise<void> {
   }
   return loading
 }
-
-declare const PIXI: unknown

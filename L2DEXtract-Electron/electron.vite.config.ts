@@ -43,6 +43,17 @@ export default defineConfig({
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
       },
+      dedupe: [
+        'pixi.js',
+        '@pixi/core',
+        '@pixi/display',
+        '@pixi/sprite',
+        '@pixi/mesh',
+        '@pixi/mesh-extras',
+        '@pixi/graphics',
+        '@pixi/assets',
+        '@pixi/ticker',
+      ],
     },
   },
 })
