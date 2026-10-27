@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
@@ -149,7 +149,17 @@ async function start() {
     if (!alive) return
     await router.push({ path: '/preview', query: { output: result.outputDir } })
   } catch (error) {
-    ElMessageBox.alert(errorText(error), '解包失败', { confirmButtonText: '知道了' })
+    ElMessageBox.alert(
+      h('div', { style: 'white-space:pre-wrap;line-height:1.6' }, [
+        errorText(error),
+        '',
+        '工坊包自动解密失败时需要填写 fileId，一般是 steamapps/workshop/content/616720/<fileId> 里的数字目录名。',
+        '.wpk 需先自行解压，再解里面的 .lpk。',
+        '输出目录默认是「文档/L2DEXtract」。',
+      ].join('\n')),
+      '解包失败',
+      { confirmButtonText: '知道了' },
+    )
   } finally {
     running.value = false
   }
