@@ -164,7 +164,7 @@ function errorText(error: unknown): string {
   <section class="extract" @dragover.prevent="onDragOver" @dragleave="onDragLeave" @drop.prevent="onDrop">
     <div class="flow">
       <p class="kicker">解包</p>
-      <h1>按步骤拆开</h1>
+      <h1>四步解开</h1>
 
       <div class="progress">
         <div class="track" aria-hidden="true">
