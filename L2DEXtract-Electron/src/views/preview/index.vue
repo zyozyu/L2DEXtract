@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Live2dPlayer, type Live2dPlayerState } from '@/live2d/player'
+import { Live2dPlayer, type Live2dControl, type Live2dPlayerState } from '@/live2d/player'
 import { useOutputStore } from '@/stores/output'
 
 const route = useRoute()
@@ -23,13 +23,61 @@ const playerState = reactive<Live2dPlayerState>({
   motions: [],
   currentExpression: '',
   currentMotion: '',
+  parameters: [],
+  parts: [],
+  hitAreas: [],
+  eyeBlink: true,
+  breath: true,
+  physics: true,
+  lipSync: true,
+  pose: true,
+  lookAt: false,
+  canEyeBlink: false,
+  canBreath: false,
+  canPhysics: false,
+  canLipSync: false,
+  canPose: false,
   posX: 0,
   posY: 0,
   scalePct: 100,
   rotation: 0,
   opacityPct: 100,
+  background: '#d5dde8',
   ready: false,
 })
+
+const motionGroups = computed(() => {
+  const groups: { name: string; items: { key: string; label: string; group: string; index: number }[] }[] = []
+  const index = new Map<string, { key: string; label: string; group: string; index: number }[]>()
+  for (const item of playerState.motions) {
+    let items = index.get(item.group)
+    if (!items) {
+      items = []
+      index.set(item.group, items)
+      groups.push({ name: item.group, items })
+    }
+    items.push(item)
+  }
+  return groups
+})
+
+const parameterGroups = computed(() => {
+  const groups: { name: string; items: Live2dControl[] }[] = []
+  const index = new Map<string, Live2dControl[]>()
+  for (const param of playerState.parameters) {
+    const name = param.group
+    let items = index.get(name)
+    if (!items) {
+      items = []
+      index.set(name, items)
+      groups.push({ name, items })
+    }
+    items.push(param)
+  }
+  return groups
+})
+
+const backgroundPresets = ['#d5dde8', '#eef3f6', '#ffffff', '#1e5168', '#00000000']
 
 let player: Live2dPlayer | null = null
 let unsub: (() => void) | null = null
@@ -76,8 +124,6 @@ function modelKey(model: ListedModel) {
   return `${model.dir}\0${model.file}`
 }
 
-const current = computed(() => models.value.find((model) => modelKey(model) === activeKey.value) ?? null)
-
 async function scan(dir: string, loadFirst: boolean) {
   outputDir.value = dir
   try {
@@ -98,9 +144,7 @@ async function pick() {
   await router.replace({ path: '/preview', query: { output: dir } })
 }
 
-async function saveAsModel() {
-  const model = current.value
-  if (!model) return
+async function saveAsModel(model: ListedModel) {
   try {
     const dest = await window.api.saveModelAs(model.dir)
     if (!dest) return
@@ -111,9 +155,15 @@ async function saveAsModel() {
   }
 }
 
-async function removeModel() {
-  const model = current.value
-  if (!model) return
+async function openFolder(model: ListedModel) {
+  try {
+    await window.api.openPath(model.dir)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : String(error))
+  }
+}
+
+async function removeModel(model: ListedModel) {
   try {
     await ElMessageBox.confirm(`删除「${model.name}」？这个目录里的文件会一起去掉。`, '删除模型', {
       confirmButtonText: '删除',
@@ -166,8 +216,66 @@ function onTransform() {
   })
 }
 
-function onExpression(value: string | number | boolean | undefined) {
+function onExpression(value: string | number | boolean | null | undefined) {
   player?.setExpression(typeof value === 'string' ? value : '')
+}
+
+function onMotion(value: string | number | boolean | null | undefined) {
+  if (typeof value !== 'string') return
+  const item = playerState.motions.find((motion) => motion.key === value)
+  if (item) player?.playMotion(item.group, item.index)
+}
+
+function onBackground(value: string | null) {
+  player?.setBackground(value || '#d5dde8')
+}
+
+function onToggle(
+  key: 'eyeBlink' | 'breath' | 'physics' | 'lipSync' | 'pose' | 'lookAt',
+  value: boolean | string | number,
+) {
+  player?.setToggle(key, value === true)
+}
+
+function onParameter(id: string, value: number | number[]) {
+  const next = Array.isArray(value) ? value[0] : value
+  if (typeof next !== 'number') return
+  const param = playerState.parameters.find((item) => item.id === id)
+  if (param) param.value = next
+  player?.setParameter(id, next)
+}
+
+function onPart(id: string, value: number | number[]) {
+  const next = Array.isArray(value) ? value[0] : value
+  if (typeof next !== 'number') return
+  const part = playerState.parts.find((item) => item.id === id)
+  if (part) part.value = next
+  player?.setPart(id, next)
+}
+
+function resetParameters() {
+  player?.resetParameters()
+  for (const param of playerState.parameters) param.value = param.defaultValue
+}
+
+function resetParts() {
+  player?.resetParts()
+  for (const part of playerState.parts) part.value = part.defaultValue
+}
+
+function formatValue(value: number) {
+  if (!Number.isFinite(value)) return ''
+  const abs = Math.abs(value)
+  if (abs >= 100) return value.toFixed(0)
+  if (abs >= 10) return value.toFixed(1)
+  return value.toFixed(2)
+}
+
+function paramStep(param: Live2dControl) {
+  const span = Math.abs(param.max - param.min)
+  if (span >= 100) return 1
+  if (span >= 2) return 0.01
+  return 0.001
 }
 </script>
 
@@ -176,8 +284,8 @@ function onExpression(value: string | number | boolean | undefined) {
     <el-card class="panel" shadow="never">
       <template #header>
         <div class="head">
-          <span>预览</span>
-          <el-text type="info">按导出路径列出模型，点一下切换。</el-text>
+          <span>模型</span>
+          <el-text type="info">按导出路径列出，点一下切换。</el-text>
         </div>
       </template>
 
@@ -192,7 +300,6 @@ function onExpression(value: string | number | boolean | undefined) {
       </el-form>
 
       <div v-if="outputDir" class="models">
-        <p class="models-label">模型</p>
         <p v-if="!models.length" class="models-empty">这个目录里没有模型</p>
         <ul v-else>
           <li v-for="model in models" :key="modelKey(model)">
@@ -202,58 +309,33 @@ function onExpression(value: string | number | boolean | undefined) {
               :title="`${model.dir}\\${model.file}`"
               @click="openModel(model)"
             >
-              {{ model.name }}
+              <span class="model-name">{{ model.name }}</span>
+              <span class="model-ops">
+                <span title="打开文件夹" @click.stop="openFolder(model)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-10Z" />
+                  </svg>
+                </span>
+                <span class="export" title="另存为" @click.stop="saveAsModel(model)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M14 4h6v6" />
+                    <path d="M20 4 10 14" />
+                    <path d="M18 13.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5.5" />
+                  </svg>
+                </span>
+                <span class="danger" title="删除" @click.stop="removeModel(model)">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16" />
+                    <path d="M9 7V4h6v3" />
+                    <path d="M7 7l1 13h8l1-13" />
+                    <path d="M10 11v6M14 11v6" />
+                  </svg>
+                </span>
+              </span>
             </button>
           </li>
         </ul>
-        <div v-if="current" class="actions">
-          <el-button @click="saveAsModel">另存为</el-button>
-          <el-button type="danger" plain @click="removeModel">删除</el-button>
-        </div>
       </div>
-
-      <template v-if="playerState.modelName">
-        <el-descriptions :column="1" border size="small">
-          <el-descriptions-item label="模型">{{ playerState.modelName }}</el-descriptions-item>
-        </el-descriptions>
-
-        <el-form label-position="top">
-          <el-form-item label="表情">
-            <el-select
-              v-model="playerState.currentExpression"
-              clearable
-              placeholder="无"
-              @change="onExpression"
-            >
-              <el-option v-for="name in playerState.expressions" :key="name" :label="name" :value="name" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="动作">
-            <div class="motions">
-              <el-button
-                v-for="name in playerState.motions"
-                :key="name"
-                size="small"
-                :type="playerState.currentMotion === name ? 'primary' : 'default'"
-                @click="player?.playMotion(name)"
-              >
-                {{ name }}
-              </el-button>
-              <el-text v-if="!playerState.motions.length" type="info" size="small">无动作</el-text>
-            </div>
-          </el-form-item>
-          <el-form-item :label="`缩放 ${playerState.scalePct}%`">
-            <el-slider v-model="playerState.scalePct" :min="10" :max="300" @input="onTransform" />
-          </el-form-item>
-          <el-form-item :label="`透明度 ${playerState.opacityPct}%`">
-            <el-slider v-model="playerState.opacityPct" :min="10" :max="100" @input="onTransform" />
-          </el-form-item>
-        </el-form>
-
-        <div class="actions">
-          <el-button @click="player?.autoFit()">自适应</el-button>
-        </div>
-      </template>
     </el-card>
 
     <div ref="stageRef" class="stage">
@@ -262,6 +344,164 @@ function onExpression(value: string | number | boolean | undefined) {
         <el-text type="info">{{ outputDir ? '选择左侧模型' : '先选择导出路径' }}</el-text>
       </div>
     </div>
+
+    <el-card class="panel params" shadow="never">
+      <template #header>
+        <div class="head">
+          <span>模型参数</span>
+          <el-text type="info">{{ playerState.modelName || '选择模型后调节' }}</el-text>
+        </div>
+      </template>
+
+      <div v-if="playerState.modelName" class="inspector">
+        <section>
+          <p class="section">显示</p>
+          <div class="param-row">
+            <div class="param-label"><span>位置 X</span><span>{{ playerState.posX }}</span></div>
+            <el-slider v-model="playerState.posX" :min="-400" :max="400" @input="onTransform" />
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span>位置 Y</span><span>{{ playerState.posY }}</span></div>
+            <el-slider v-model="playerState.posY" :min="-400" :max="400" @input="onTransform" />
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span>缩放</span><span>{{ playerState.scalePct }}%</span></div>
+            <el-slider v-model="playerState.scalePct" :min="10" :max="300" @input="onTransform" />
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span>旋转</span><span>{{ playerState.rotation }}°</span></div>
+            <el-slider v-model="playerState.rotation" :min="-180" :max="180" @input="onTransform" />
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span>不透明度</span><span>{{ playerState.opacityPct }}%</span></div>
+            <el-slider v-model="playerState.opacityPct" :min="0" :max="100" @input="onTransform" />
+          </div>
+          <div class="param-row">
+            <div class="param-label"><span>背景</span></div>
+            <el-color-picker
+              v-model="playerState.background"
+              show-alpha
+              :predefine="backgroundPresets"
+              @active-change="onBackground"
+              @change="onBackground"
+            />
+          </div>
+          <div class="actions">
+            <el-button @click="player?.autoFit()">自适应</el-button>
+          </div>
+        </section>
+
+        <section>
+          <p class="section">表情</p>
+          <el-select
+            v-model="playerState.currentExpression"
+            clearable
+            placeholder="无"
+            @change="onExpression"
+          >
+            <el-option v-for="name in playerState.expressions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </section>
+
+        <section>
+          <p class="section">动作</p>
+          <el-select
+            v-model="playerState.currentMotion"
+            clearable
+            placeholder="无"
+            @change="onMotion"
+          >
+            <el-option-group v-for="group in motionGroups" :key="group.name" :label="group.name">
+              <el-option v-for="item in group.items" :key="item.key" :label="item.label" :value="item.key" />
+            </el-option-group>
+          </el-select>
+        </section>
+
+        <section>
+          <p class="section">自动</p>
+          <div class="switches">
+            <label v-if="playerState.canEyeBlink" class="switch">
+              <span>自动眨眼</span>
+              <el-switch v-model="playerState.eyeBlink" @change="onToggle('eyeBlink', $event)" />
+            </label>
+            <label v-if="playerState.canBreath" class="switch">
+              <span>呼吸</span>
+              <el-switch v-model="playerState.breath" @change="onToggle('breath', $event)" />
+            </label>
+            <label v-if="playerState.canPhysics" class="switch">
+              <span>物理演算</span>
+              <el-switch v-model="playerState.physics" @change="onToggle('physics', $event)" />
+            </label>
+            <label v-if="playerState.canLipSync" class="switch">
+              <span>口形同步</span>
+              <el-switch v-model="playerState.lipSync" @change="onToggle('lipSync', $event)" />
+            </label>
+            <label v-if="playerState.canPose" class="switch">
+              <span>姿势</span>
+              <el-switch v-model="playerState.pose" @change="onToggle('pose', $event)" />
+            </label>
+            <label class="switch">
+              <span>视线追随</span>
+              <el-switch v-model="playerState.lookAt" @change="onToggle('lookAt', $event)" />
+            </label>
+          </div>
+        </section>
+
+        <section v-if="playerState.parameters.length">
+          <div class="section-row">
+            <p class="section">参数</p>
+            <button type="button" class="text-btn" @click="resetParameters">恢复默认</button>
+          </div>
+          <template v-for="group in parameterGroups" :key="group.name || 'all'">
+            <p v-if="group.name" class="group-name">{{ group.name }}</p>
+            <div v-for="param in group.items" :key="param.id" class="param-row">
+              <div class="param-label">
+                <span :title="param.id">{{ param.name }}</span>
+                <span>{{ formatValue(param.value) }}</span>
+              </div>
+              <el-slider
+                :model-value="param.value"
+                :min="param.min"
+                :max="param.max === param.min ? param.min + 1 : param.max"
+                :step="paramStep(param)"
+                :disabled="param.max === param.min"
+                :show-tooltip="false"
+                @input="onParameter(param.id, $event)"
+              />
+            </div>
+          </template>
+        </section>
+
+        <section v-if="playerState.parts.length">
+          <div class="section-row">
+            <p class="section">部件</p>
+            <button type="button" class="text-btn" @click="resetParts">恢复默认</button>
+          </div>
+          <div v-for="part in playerState.parts" :key="part.id" class="param-row">
+            <div class="param-label">
+              <span :title="part.id">{{ part.name }}</span>
+              <span>{{ part.value }}%</span>
+            </div>
+            <el-slider
+              :model-value="part.value"
+              :min="0"
+              :max="100"
+              :step="1"
+              :show-tooltip="false"
+              @input="onPart(part.id, $event)"
+            />
+          </div>
+        </section>
+
+        <section v-if="playerState.hitAreas.length">
+          <p class="section">命中判定</p>
+          <div class="chips">
+            <span v-for="name in playerState.hitAreas" :key="name" class="hit">{{ name }}</span>
+          </div>
+        </section>
+      </div>
+      <p v-else class="models-empty">选择左侧模型</p>
+    </el-card>
   </section>
 </template>
 
@@ -274,8 +514,12 @@ function onExpression(value: string | number | boolean | undefined) {
   animation: rise 0.45s ease both;
 }
 
+.panel.params {
+  width: 360px;
+}
+
 .panel {
-  width: 320px;
+  width: 300px;
   flex: none;
   height: 100%;
   display: flex;
@@ -307,12 +551,12 @@ function onExpression(value: string | number | boolean | undefined) {
   gap: 8px;
 }
 
-.models-label {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
-  color: #3e5566;
+.models {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .models-empty {
@@ -323,10 +567,11 @@ function onExpression(value: string | number | boolean | undefined) {
 }
 
 .models ul {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 220px;
   margin: 0;
   padding: 0;
   overflow: auto;
@@ -334,11 +579,11 @@ function onExpression(value: string | number | boolean | undefined) {
 }
 
 .models button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  padding: 10px 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 6px 6px 6px 12px;
   text-align: left;
   font: inherit;
   font-size: 13px;
@@ -347,6 +592,52 @@ function onExpression(value: string | number | boolean | undefined) {
   border: 1px solid var(--el-border-color);
   border-radius: var(--el-border-radius-base);
   cursor: pointer;
+}
+
+.model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-ops {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.model-ops > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  color: #5d7282;
+}
+
+.model-ops > span:hover {
+  background: #eef3f6;
+}
+
+.model-ops .export {
+  color: #2b6cb0;
+}
+
+.model-ops .danger {
+  color: #c4533c;
+}
+
+.model-ops svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .models button.on,
@@ -363,10 +654,105 @@ function onExpression(value: string | number | boolean | undefined) {
   outline-offset: 3px;
 }
 
-.motions {
+.chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.section {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  color: #3e5566;
+}
+
+.section-row .section {
+  margin: 0;
+}
+
+.group-name {
+  margin: 10px 0 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.param-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.param-label span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.param-row :deep(.el-slider) {
+  --el-slider-height: 4px;
+  --el-slider-button-size: 12px;
+  --el-slider-button-wrapper-size: 20px;
+  --el-slider-button-wrapper-offset: -8px;
+  height: 20px;
+}
+
+.param-row :deep(.el-slider__runway) {
+  margin: 6px 0;
+}
+
+.switches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.text-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1e5168;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.text-btn:focus-visible {
+  outline: 2px solid #1e5168;
+  outline-offset: 2px;
+}
+
+.hit {
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #3e5566;
+  background: #eef3f6;
+  border-radius: 999px;
 }
 
 .stage {
