@@ -78,7 +78,7 @@ export class Live2dPlayer {
   }
   private readonly onPointerMove = (event: any) => {
     if (!this.state.lookAt || !this.model) return
-    const point = event.data?.global
+    const point = event.global ?? event.data?.global
     if (!point) return
     this.model.focus(point.x, point.y)
   }
@@ -155,7 +155,7 @@ export class Live2dPlayer {
       this.spineMode = true
       this.model = await loadSpineModel(PIXI, modelUrl, data)
     } else {
-      this.model = await PIXI.live2d.Live2DModel.from(modelUrl)
+      this.model = await PIXI.live2d.Live2DModel.from(modelUrl, { autoInteract: false })
       this.model.internalModel?.on?.('beforeModelUpdate', this.onBeforeUpdate)
     }
     this.model.on?.('pointermove', this.onPointerMove)
