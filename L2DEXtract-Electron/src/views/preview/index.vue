@@ -707,15 +707,25 @@ function paramStep(param: Live2dControl) {
 }
 
 .param-row :deep(.el-slider) {
-  --el-slider-height: 4px;
-  --el-slider-button-size: 12px;
-  --el-slider-button-wrapper-size: 20px;
-  --el-slider-button-wrapper-offset: -8px;
-  height: 20px;
+  --el-slider-height: 6px;
+  --el-slider-button-size: 14px;
+  --el-slider-button-wrapper-size: 14px;
+  --el-slider-button-wrapper-offset: -4px;
+  height: 22px;
 }
 
-.param-row :deep(.el-slider__runway) {
-  margin: 6px 0;
+.param-row :deep(.el-slider__button-wrapper) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.param-row :deep(.el-slider__button-wrapper::after) {
+  content: none;
+}
+
+.param-row :deep(.el-slider__button) {
+  display: block;
 }
 
 .switches {
