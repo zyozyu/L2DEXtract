@@ -1,12 +1,11 @@
 import * as PixiNs from 'pixi.js'
+import coreUrl from './vendor/live2dcubismcore.min.js?url'
+import live2dUrl from './vendor/live2d.min.js?url'
+import indexUrl from './vendor/index.min.js?url'
 
 const PIXI = { ...PixiNs } as typeof PixiNs & { live2d?: unknown }
 
-const SCRIPTS = [
-  '/live2d-vendor/live2dcubismcore.min.js',
-  '/live2d-vendor/live2d.min.js',
-  '/live2d-vendor/index.min.js',
-]
+const SCRIPTS = [coreUrl, live2dUrl, indexUrl].map((file) => new URL(file, window.location.href).href)
 
 let loading: Promise<void> | null = null
 
