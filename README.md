@@ -4,13 +4,21 @@
 
 ## 项目介绍
 
-解包 `.lpk` 格式文件，并在窗口里预览解出来的 Live2D 模型。桌面端使用 Electron、Vue 3 和 TypeScript。
+解包 `.lpk` 格式文件，并在窗口里预览解出来的模型。桌面端使用 Electron、Vue 3 和 TypeScript。
 
 可以直接下载使用：https://github.com/zyozyu/L2DEXtract/releases/
 
 - 解包 `STD2_0`、`STM_1_0`，未知或更早的包按 `STD_1_0` 尝试
 - 拖入 `.lpk` 和 `config.json`，同目录的 `config.json` 会自动填上
 - 在软件里预览模型，也可以用系统浏览器打开同一预览页
+
+## 支持预览的模型
+
+- **Cubism 3/4**：`.model3.json`，且含 `FileReferences.Moc`
+- **Cubism 2**：`.model.json`，含字符串 `model`，且 `textures` 为数组
+- **Spine 3.8**：`model0.json`，且含 `skeleton` 和 `atlases`。可切换动作，并播放动作上的语音
+
+只支持 Spine 3.8。其他版本的骨骼不会加载。
 
 首页
 

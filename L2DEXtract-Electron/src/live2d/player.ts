@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { loadLive2dVendor } from './loadVendor'
+import { isSpineModel, loadSpineModel, spineMotionItems } from './spine'
 
 export interface Live2dMotionItem {
   key: string
@@ -67,6 +68,8 @@ export class Live2dPlayer {
   private savedPhysics: any = undefined
   private savedPose: any = undefined
   private savedNatural: ((delta: number, time: number) => void) | null = null
+  private spineMode = false
+  private audio: HTMLAudioElement | null = null
   private readonly onBeforeUpdate = () => {
     const core = this.model?.internalModel?.coreModel
     if (!core) return
@@ -75,7 +78,7 @@ export class Live2dPlayer {
   }
   private readonly onPointerMove = (event: any) => {
     if (!this.state.lookAt || !this.model) return
-    const point = event.data?.global
+    const point = event.global ?? event.data?.global
     if (!point) return
     this.model.focus(point.x, point.y)
   }
@@ -144,14 +147,26 @@ export class Live2dPlayer {
     this.savedPhysics = undefined
     this.savedPose = undefined
     this.savedNatural = null
-    this.model = await PIXI.live2d.Live2DModel.from(modelUrl)
-    this.model.internalModel?.on?.('beforeModelUpdate', this.onBeforeUpdate)
+    this.spineMode = false
+    this.stopSound()
+    const data = await readModelJson(modelUrl)
+    this.modelData = data
+    if (isSpineModel(data)) {
+      this.spineMode = true
+      this.model = await loadSpineModel(PIXI, modelUrl, data)
+    } else {
+      this.model = await PIXI.live2d.Live2DModel.from(modelUrl, { autoInteract: false })
+      this.model.internalModel?.on?.('beforeModelUpdate', this.onBeforeUpdate)
+    }
     this.model.on?.('pointermove', this.onPointerMove)
+    if (this.spineMode) this.model.eventMode = 'static'
     this.app.stage.addChild(this.model)
     this.model.visible = true
     this.model.interactive = true
     this.model.on('pointerdown', () => this.playRandomMotion())
     await this.refreshModelInfo()
+    if (this.spineMode) this.playSpineMotion('idle', 0, false)
+    this.model?.update?.(0)
     this.autoFit()
   }
 
@@ -173,6 +188,10 @@ export class Live2dPlayer {
 
   playMotion(group: string, index = 0) {
     if (!this.model) return
+    if (this.spineMode) {
+      this.playSpineMotion(group, index, true)
+      return
+    }
     this.model.motion(group, index)
     this.patch({ currentMotion: `${group}:${index}` })
   }
@@ -251,6 +270,8 @@ export class Live2dPlayer {
     }
     this.modelPath = ''
     this.modelData = null
+    this.spineMode = false
+    this.stopSound()
     this.paramOverrides.clear()
     this.partOverrides.clear()
     this.patch({
@@ -271,6 +292,7 @@ export class Live2dPlayer {
   }
 
   destroy() {
+    this.stopSound()
     this.resizeObserver?.disconnect()
     this.resizeObserver = null
     if (this.model) {
@@ -324,6 +346,34 @@ export class Live2dPlayer {
   }
 
   private async refreshModelInfo() {
+    if (this.spineMode) {
+      const hitAreas = Array.isArray(this.modelData?.hit_areas)
+        ? this.modelData.hit_areas.map((item: { name?: string }) => item?.name || '').filter(Boolean)
+        : []
+      const modelName = this.modelPath.split(/[\\/]/).pop() || ''
+      this.patch({
+        modelName: decodeURIComponent(modelName),
+        expressions: [],
+        motions: spineMotionItems(this.modelData),
+        parameters: [],
+        parts: [],
+        hitAreas,
+        currentExpression: '',
+        currentMotion: '',
+        eyeBlink: false,
+        breath: false,
+        physics: false,
+        lipSync: false,
+        pose: false,
+        lookAt: false,
+        canEyeBlink: false,
+        canBreath: false,
+        canPhysics: false,
+        canLipSync: false,
+        canPose: false,
+      })
+      return
+    }
     let data = this.modelData
     if (!data && this.modelPath) {
       try {
@@ -453,7 +503,47 @@ export class Live2dPlayer {
     return motions ? Object.keys(motions) : []
   }
 
+  private playSpineMotion(group: string, index: number, withSound: boolean) {
+    const list = this.modelData?.motions?.[group]
+    const item = Array.isArray(list) ? list[index] : null
+    const name = item?.file
+    if (!name || !this.model?.state) return
+    const loop = item.file_loop === true || group === 'idle'
+    try {
+      this.model.state.setAnimation(0, name, loop)
+      if (!loop) {
+        const idle = this.modelData?.motions?.idle?.[0]?.file
+        if (typeof idle === 'string' && idle) this.model.state.addAnimation(0, idle, true, 0)
+      }
+    } catch {
+      return
+    }
+    if (withSound) this.playSound(typeof item.sound === 'string' ? item.sound : '')
+    this.patch({ currentMotion: `${group}:${index}` })
+  }
+
+  private playSound(file: string) {
+    this.stopSound()
+    if (!file || !this.modelPath) return
+    const audio = new Audio(new URL(file, this.modelPath).href)
+    this.audio = audio
+    void audio.play().catch(() => {})
+  }
+
+  private stopSound() {
+    this.audio?.pause()
+    this.audio = null
+  }
+
   private playRandomMotion() {
+    if (this.spineMode) {
+      const pool = this.state.motions.filter((item) => item.group !== 'idle')
+      const items = pool.length ? pool : this.state.motions
+      if (!items.length) return
+      const item = items[Math.floor(Math.random() * items.length)]
+      if (item) this.playSpineMotion(item.group, item.index, true)
+      return
+    }
     const groups = this.getMotionGroups()
     if (!groups.length || !this.model) return
     const group = groups[Math.floor(Math.random() * groups.length)]!
@@ -464,6 +554,16 @@ export class Live2dPlayer {
   private patch(partial: Partial<Live2dPlayerState>) {
     this.state = { ...this.state, ...partial }
     for (const listener of this.listeners) listener(this.state)
+  }
+}
+
+async function readModelJson(modelUrl: string) {
+  try {
+    const response = await fetch(modelUrl)
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
   }
 }
 
