@@ -1,6 +1,6 @@
 {
   "name": "l2dextract-electron",
-  "version": "0.0.0",
+  "version": "1.0.0.261027",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -65,6 +65,17 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "L2DEXtract",
+      "runAfterFinish": true,
+      "installerLanguages": ["zh_CN"]
     }
   }
 }
